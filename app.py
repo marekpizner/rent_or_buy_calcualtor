@@ -43,6 +43,23 @@ def roi(annual_rent, annual_expenses, down_payment):
     net_profit = annual_rent - annual_expenses
     return (net_profit / down_payment) * 100
 
+def calculate_score(price_to_rent, roi_value, net_yield, dti_value):
+    """Calculate the total score based on the metrics."""
+    score = 0
+    # Price-to-Rent Ratio
+    if price_to_rent < 15:
+        score += 1
+    # ROI
+    if roi_value > 10:
+        score += 1
+    # Net Rental Yield
+    if net_yield > 5:
+        score += 1
+    # Debt-to-Income Ratio
+    if dti_value < 36:
+        score += 1
+    return score
+
 def create_2d_heatmap(data_matrix, purchase_prices, annual_rents, current_price, current_rent, title, x_label, y_label):
     """Generate a 2D heatmap to visualize metric performance with a highlighted cell."""
     # Create a DataFrame for better labeling in the heatmap
@@ -72,65 +89,38 @@ def create_2d_heatmap(data_matrix, purchase_prices, annual_rents, current_price,
     ax.set_ylabel(y_label)
     return fig
 
-# Streamlit UI
-st.title("Buy vs Rent Calculator")
-
-st.header("Enter Property Details")
-purchase_price = st.number_input("Purchase Price ($):", min_value=0.0, value=300000.0)
-down_payment_percentage = st.number_input("Down Payment (%):", min_value=0.0, max_value=100.0, value=20.0)
-loan_term = st.number_input("Loan Term (years):", min_value=1, max_value=30, value=30)
-interest_rate = st.number_input("Interest Rate (%):", min_value=0.0, max_value=100.0, value=3.5)
-property_tax_rate = st.number_input("Property Tax Rate (%):", min_value=0.0, max_value=10.0, value=1.0)
-maintenance_cost_rate = st.number_input("Maintenance Cost Rate (%):", min_value=0.0, max_value=10.0, value=1.0)
-
-st.header("Enter Renting Details")
-annual_rent = st.number_input("Annual Rent ($):", min_value=0.0, value=15000.0)
-rent_increase_rate = st.number_input("Annual Rent Increase Rate (%):", min_value=0.0, max_value=20.0, value=2.0)
-
-st.header("Enter Your Financial Details")
-annual_income = st.number_input("Annual Income ($):", min_value=0.0, value=60000.0)
-
-st.header("Enter Market Growth Details")
-annual_appreciation_rate = st.number_input("Annual Property Appreciation Rate (%):", min_value=0.0, max_value=20.0, value=3.0)
-
-def calculate_score(price_to_rent, roi_value, net_yield, cash_return, dti_value):
-    """Calculate the total score based on the metrics."""
-    score = 0
-    # Price-to-Rent Ratio
-    if price_to_rent < 15:
-        score += 1
-    # ROI
-    if roi_value > 10:
-        score += 1
-    # Net Rental Yield
-    if net_yield > 5:
-        score += 1
-    # Cash-on-Cash Return
-    if cash_return > 8:
-        score += 1
-    # Debt-to-Income Ratio
-    if dti_value < 36:
-        score += 1
-    return score
-
-def create_enhanced_horizontal_bar(score, max_score=5):
-    """Create an enhanced horizontal decision bar with dynamic annotations."""
-    # Gradient colors
+def create_enhanced_horizontal_bar(score, max_score=4, sections=None, cmap='RdYlGn'):
+    """
+    Create an enhanced horizontal decision bar with dynamic annotations.
+    
+    Parameters:
+        score (float): The current score to highlight on the bar.
+        max_score (int): The maximum score on the scale.
+        sections (list): Custom labels for decision ranges. Default is a 5-section scale.
+        cmap (str): Colormap for the gradient. Default is 'RdYlGn'.
+        
+    Returns:
+        fig: A matplotlib figure object.
+    """
+    # Default sections if none are provided
+    if sections is None:
+        sections = ['Don’t Buy', 'Consider', 'Neutral', 'Lean Buy', 'Strong Buy']
+    
+    num_sections = len(sections)
     gradient = np.linspace(0, 1, 500)
     gradient = np.vstack((gradient, gradient))
 
     # Setup the figure
     fig, ax = plt.subplots(figsize=(10, 2))
-    ax.imshow(gradient, extent=[0, max_score, -0.5, 0.5], aspect='auto', cmap='RdYlGn')
+    ax.imshow(gradient, extent=[0, max_score, -0.5, 0.5], aspect='auto', cmap=cmap)
 
     # Add a marker for the score
     ax.plot(score, 0, 'k^', markersize=12)  # Marker at the score position
-    ax.text(score, 0.8, f'{score}/5', ha='center', va='bottom', fontsize=12, fontweight='bold', color='black')
+    ax.text(score, 0.8, f'{score}/{max_score}', ha='center', va='bottom', fontsize=12, fontweight='bold', color='black')
 
     # Add labels for decision ranges
-    sections = ['Don’t Buy', 'Consider', 'Neutral', 'Lean Buy', 'Strong Buy']
     for i, label in enumerate(sections):
-        x = i + 0.5
+        x = (i + 0.5) * (max_score / num_sections)  # Dynamically space the labels
         ax.text(x, -0.6, label, ha='center', va='center', fontsize=10, color='black')
 
     # Remove unnecessary elements
@@ -141,6 +131,28 @@ def create_enhanced_horizontal_bar(score, max_score=5):
 
     ax.set_title('Decision Score', fontsize=14, pad=10)
     return fig
+
+# Streamlit UI
+st.title("Buy vs Rent Calculator")
+
+st.header("Enter Property Details")
+purchase_price = st.number_input("Purchase Price ($):", min_value=0.0, value=140000.0)
+down_payment_percentage = st.number_input("Down Payment (%):", min_value=0.0, max_value=100.0, value=20.0)
+loan_term = st.number_input("Loan Term (years):", min_value=1, max_value=30, value=30)
+interest_rate = st.number_input("Interest Rate (%):", min_value=0.0, max_value=100.0, value=4.0)
+property_tax_rate = st.number_input("Property Tax Rate (%):", min_value=0.0, max_value=10.0, value=0.5)
+maintenance_cost_rate = st.number_input("Maintenance Cost Rate (%):", min_value=0.0, max_value=10.0, value=1.5)
+
+st.header("Enter Renting Details")
+annual_rent = st.number_input("Annual Rent ($):", min_value=0.0, value=9000.0)
+# rent_increase_rate = st.number_input("Annual Rent Increase Rate (%):", min_value=0.0, max_value=20.0, value=2.0)
+
+st.header("Enter Your Financial Details")
+annual_income = st.number_input("Annual Income ($):", min_value=0.0, value=60000.0)
+
+# st.header("Enter Market Growth Details")
+# annual_appreciation_rate = st.number_input("Annual Property Appreciation Rate (%):", min_value=0.0, max_value=20.0, value=2.0)
+
 
 if st.button("Calculate"):
 
@@ -189,10 +201,10 @@ if st.button("Calculate"):
     ))
 
     ### ROI ###
-    st.markdown("### Return on Investment (ROI)")
+    st.markdown("### Return on Investment (cash on cash)")
     result_roi = roi(annual_rent, annual_expenses, down_payment)
     st.write(f"**Value:** {result_roi:.2f}%")
-    st.caption("ROI measures the profitability of your investment. A higher ROI indicates better returns. For example, an ROI above 10% is generally considered good for real estate, while a lower ROI may signal a need for further analysis of the investment.")
+    st.caption("ROI measures the profitability of your investment. A higher ROI indicates better returns. For example, an ROI above 8% - 10% is generally considered good for real estate, while a lower ROI may signal a need for further analysis of the investment.")
 
     st.pyplot(create_2d_heatmap(
         data_matrix=roi_matrix,
@@ -211,12 +223,6 @@ if st.button("Calculate"):
     st.write(f"**Value:** {net_yield:.2f}%")
     st.caption("Net Rental Yield indicates the return on the property's value after covering annual expenses. A yield above 5% is considered favorable.")
 
-    ### Cash-on-Cash Return ###
-    st.markdown("### Cash-on-Cash Return")
-    cash_return = cash_on_cash_return(annual_rent, annual_expenses, down_payment)
-    st.write(f"**Value:** {cash_return:.2f}%")
-    st.caption("Cash-on-Cash Return measures the return on your initial cash investment (down payment). A return above 8% is considered strong.")
-
     ### Debt-to-Income Ratio (DTI) ###
     st.markdown("### Debt-to-Income Ratio (DTI)")
     debt_to_income = dti(monthly_payment, annual_income)
@@ -228,8 +234,8 @@ if st.button("Calculate"):
     st.write(f"**Value:** ${monthly_payment:.2f}")
     st.caption("This is your estimated monthly mortgage payment based on the provided loan amount, interest rate, and loan term.")
 
-        # Calculate Score
-    total_score = calculate_score(result_price_to_rent_ratio, result_roi, net_yield, cash_return, debt_to_income)
+    # Calculate Score
+    total_score = calculate_score(result_price_to_rent_ratio, result_roi, net_yield, debt_to_income)
 
     # Display Gauge Chart
     st.markdown("### Decision Gauge")
