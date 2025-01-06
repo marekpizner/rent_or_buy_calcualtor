@@ -1,51 +1,76 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-def calculate_buy_vs_rent(
-    purchase_price, down_payment_percentage, loan_term, interest_rate,
-    property_tax_rate, maintenance_cost_rate, annual_rent, rent_increase_rate, annual_appreciation_rate
-):
-    down_payment = purchase_price * (down_payment_percentage / 100)
-    loan_amount = purchase_price - down_payment
-    monthly_interest_rate = (interest_rate / 100) / 12
+
+def monthly_mortgage_payment(loan_amount, annual_interest_rate, loan_term):
+    """Calculate the monthly mortgage payment for a fixed-rate mortgage."""
+    monthly_interest_rate = (annual_interest_rate / 100) / 12
     loan_term_months = loan_term * 12
 
     # Monthly mortgage payment (using the formula for fixed-rate mortgages)
-    monthly_mortgage_payment = (
+    monthly_payment = (
         loan_amount * monthly_interest_rate * (1 + monthly_interest_rate)**loan_term_months
     ) / ((1 + monthly_interest_rate)**loan_term_months - 1)
+    return monthly_payment
 
-    # Annual property tax and maintenance costs
+def annual_property_expenses(purchase_price, property_tax_rate, maintenance_cost_rate):
+    """Calculate the annual property expenses based on the purchase price."""
     annual_property_tax = purchase_price * (property_tax_rate / 100)
     annual_maintenance_cost = purchase_price * (maintenance_cost_rate / 100)
+    return annual_property_tax + annual_maintenance_cost
 
-    # Calculate costs over the loan term
-    total_buying_costs = 0
-    total_renting_costs = 0
-    property_value = purchase_price
+def price_to_rent_ratio(purchase_price, annual_rent):
+    """Calculate the price-to-rent ratio based on the purchase price and annual rent."""
+    return purchase_price / annual_rent
 
-    yearly_buying_costs = []
-    yearly_renting_costs = []
-    property_values = []
+def net_rental_yield(annual_rent, annual_expenses, purchase_price):
+    """Calculate the net rental yield based on the annual rent, expenses, and purchase price."""
+    return ((annual_rent - annual_expenses) / purchase_price) * 100
 
-    for year in range(1, loan_term + 1):
-        annual_mortgage_cost = monthly_mortgage_payment * 12
-        total_buying_costs += annual_mortgage_cost + annual_property_tax + annual_maintenance_cost
+def cash_on_cash_return(annual_rent, annual_expenses, down_payment):
+    """Calculate the cash-on-cash return based on the annual rent, expenses, and down payment."""
+    return ((annual_rent - annual_expenses) / down_payment) * 100
 
-        # Update property value with appreciation
-        property_value *= (1 + annual_appreciation_rate / 100)
+def dti(monthly_mortgage_payment, annual_income):
+    """Calculate the debt-to-income ratio based on the monthly mortgage payment and annual income."""
+    return (monthly_mortgage_payment * 12 / annual_income) * 100
 
-        # Update rent with yearly increase
-        annual_rent *= (1 + rent_increase_rate / 100)
-        total_renting_costs += annual_rent
+def roi(annual_rent, annual_expenses, down_payment):
+    """Calculate the Return on Investment (ROI) based on annual rent, expenses, and down payment."""
+    net_profit = annual_rent - annual_expenses
+    return (net_profit / down_payment) * 100
 
-        # Append yearly costs and property value for chart
-        yearly_buying_costs.append(total_buying_costs)
-        yearly_renting_costs.append(total_renting_costs)
-        property_values.append(property_value)
+def create_2d_heatmap(data_matrix, purchase_prices, annual_rents, current_price, current_rent, title, x_label, y_label):
+    """Generate a 2D heatmap to visualize metric performance with a highlighted cell."""
+    # Create a DataFrame for better labeling in the heatmap
+    df_matrix = pd.DataFrame(data_matrix, index=np.round(annual_rents, 0), columns=np.round(purchase_prices, 0))
 
-    return total_buying_costs, total_renting_costs, property_value, yearly_buying_costs, yearly_renting_costs, property_values
+    # Find the closest indices to the current values
+    closest_price_idx = np.abs(purchase_prices - current_price).argmin()
+    closest_rent_idx = np.abs(annual_rents - current_rent).argmin()
+
+    # Generate the heatmap
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.heatmap(
+        df_matrix,
+        annot=True,
+        fmt=".2f",
+        cmap=sns.diverging_palette(133, 10, as_cmap=True),  # Green-Red color scheme
+        cbar=True,
+        ax=ax,
+    )
+
+    # Highlight the current cell
+    ax.add_patch(plt.Rectangle((closest_price_idx, closest_rent_idx), 1, 1, fill=False, edgecolor='yellow', lw=3))
+
+    # Set labels and title
+    ax.set_title(title, fontsize=14)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    return fig
 
 # Streamlit UI
 st.title("Buy vs Rent Calculator")
@@ -62,37 +87,150 @@ st.header("Enter Renting Details")
 annual_rent = st.number_input("Annual Rent ($):", min_value=0.0, value=15000.0)
 rent_increase_rate = st.number_input("Annual Rent Increase Rate (%):", min_value=0.0, max_value=20.0, value=2.0)
 
+st.header("Enter Your Financial Details")
+annual_income = st.number_input("Annual Income ($):", min_value=0.0, value=60000.0)
+
 st.header("Enter Market Growth Details")
 annual_appreciation_rate = st.number_input("Annual Property Appreciation Rate (%):", min_value=0.0, max_value=20.0, value=3.0)
 
+def calculate_score(price_to_rent, roi_value, net_yield, cash_return, dti_value):
+    """Calculate the total score based on the metrics."""
+    score = 0
+    # Price-to-Rent Ratio
+    if price_to_rent < 15:
+        score += 1
+    # ROI
+    if roi_value > 10:
+        score += 1
+    # Net Rental Yield
+    if net_yield > 5:
+        score += 1
+    # Cash-on-Cash Return
+    if cash_return > 8:
+        score += 1
+    # Debt-to-Income Ratio
+    if dti_value < 36:
+        score += 1
+    return score
+
+def create_enhanced_horizontal_bar(score, max_score=5):
+    """Create an enhanced horizontal decision bar with dynamic annotations."""
+    # Gradient colors
+    gradient = np.linspace(0, 1, 500)
+    gradient = np.vstack((gradient, gradient))
+
+    # Setup the figure
+    fig, ax = plt.subplots(figsize=(10, 2))
+    ax.imshow(gradient, extent=[0, max_score, -0.5, 0.5], aspect='auto', cmap='RdYlGn')
+
+    # Add a marker for the score
+    ax.plot(score, 0, 'k^', markersize=12)  # Marker at the score position
+    ax.text(score, 0.8, f'{score}/5', ha='center', va='bottom', fontsize=12, fontweight='bold', color='black')
+
+    # Add labels for decision ranges
+    sections = ['Don’t Buy', 'Consider', 'Neutral', 'Lean Buy', 'Strong Buy']
+    for i, label in enumerate(sections):
+        x = i + 0.5
+        ax.text(x, -0.6, label, ha='center', va='center', fontsize=10, color='black')
+
+    # Remove unnecessary elements
+    ax.set_xlim(0, max_score)
+    ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_frame_on(False)
+
+    ax.set_title('Decision Score', fontsize=14, pad=10)
+    return fig
+
 if st.button("Calculate"):
-    total_buying_costs, total_renting_costs, property_value, yearly_buying_costs, yearly_renting_costs, property_values = calculate_buy_vs_rent(
-        purchase_price, down_payment_percentage, loan_term, interest_rate,
-        property_tax_rate, maintenance_cost_rate, annual_rent, rent_increase_rate, annual_appreciation_rate
-    )
 
     st.subheader("Results")
-    st.write(f"Total Costs of Buying Over {loan_term} Years: ${total_buying_costs:,.2f}")
-    st.write(f"Total Costs of Renting Over {loan_term} Years: ${total_renting_costs:,.2f}")
-    st.write(f"Estimated Property Value After {loan_term} Years: ${property_value:,.2f}")
 
-    if total_buying_costs < total_renting_costs:
-        st.success("Buying is better than renting based on the given inputs.")
-    else:
-        st.warning("Renting is better than buying based on the given inputs.")
+    # Common Calculations
+    down_payment = purchase_price * (down_payment_percentage / 100)
+    loan_amount = purchase_price - down_payment
+    annual_expenses = annual_property_expenses(purchase_price, property_tax_rate, maintenance_cost_rate)
+    monthly_payment = monthly_mortgage_payment(loan_amount, interest_rate, loan_term)
 
-    # Plotting the results
-    st.subheader("Cost Comparison Over Time")
-    fig, ax = plt.subplots()
-    years = list(range(1, loan_term + 1))
-    ax.plot(years, yearly_buying_costs, label="Buying Costs", linestyle="--")
-    ax.plot(years, yearly_renting_costs, label="Renting Costs", linestyle="-")
-    ax.plot(years, property_values, label="Property Value", linestyle="-")
+    # Define dynamic ranges for Purchase Price and Annual Rent
+    purchase_prices = np.linspace(purchase_price * 0.8, purchase_price * 1.2, 5)  # +/- 20% range
+    annual_rents = np.linspace(annual_rent * 0.8, annual_rent * 1.2, 5)           # +/- 20% range
 
-    ax.set_xlabel("Years")
-    ax.set_ylabel("Cost / Value ($)")
-    ax.set_title("Buy vs Rent Analysis")
-    ax.legend()
-    ax.grid(True)
+    # Precompute Price-to-Rent Ratio Matrix
+    price_to_rent_matrix = np.array([
+        [price_to_rent_ratio(price, rent) for price in purchase_prices]
+        for rent in annual_rents
+    ])
 
-    st.pyplot(fig)
+    # Precompute ROI Matrix
+    roi_matrix = np.array([
+        [
+            roi(rent, annual_property_expenses(price, property_tax_rate, maintenance_cost_rate), price * (down_payment_percentage / 100))
+            for price in purchase_prices
+        ]
+        for rent in annual_rents
+    ])
+
+    ### Price-to-Rent Ratio ###
+    st.markdown("### Price-to-Rent Ratio")
+    result_price_to_rent_ratio = price_to_rent_ratio(purchase_price, annual_rent)
+    st.write(f"**Value:** {result_price_to_rent_ratio:.2f}")
+    st.caption("The Price-to-Rent Ratio helps decide whether to buy or rent a property. A ratio below 15 favors buying, as the cost of purchasing is relatively low compared to renting. A ratio above 20 suggests renting might be better, as buying is significantly more expensive.")
+
+    st.pyplot(create_2d_heatmap(
+        data_matrix=price_to_rent_matrix,
+        purchase_prices=purchase_prices,
+        annual_rents=annual_rents,
+        current_price=purchase_price,
+        current_rent=annual_rent,
+        title="Price-to-Rent Ratio Heatmap",
+        x_label="Purchase Price ($)",
+        y_label="Annual Rent ($)"
+    ))
+
+    ### ROI ###
+    st.markdown("### Return on Investment (ROI)")
+    result_roi = roi(annual_rent, annual_expenses, down_payment)
+    st.write(f"**Value:** {result_roi:.2f}%")
+    st.caption("ROI measures the profitability of your investment. A higher ROI indicates better returns. For example, an ROI above 10% is generally considered good for real estate, while a lower ROI may signal a need for further analysis of the investment.")
+
+    st.pyplot(create_2d_heatmap(
+        data_matrix=roi_matrix,
+        purchase_prices=purchase_prices,
+        annual_rents=annual_rents,
+        current_price=purchase_price,
+        current_rent=annual_rent,
+        title="Return on Investment (ROI) Heatmap",
+        x_label="Purchase Price ($)",
+        y_label="Annual Rent ($)"
+    ))
+
+    ### Net Rental Yield ###
+    st.markdown("### Net Rental Yield")
+    net_yield = net_rental_yield(annual_rent, annual_expenses, purchase_price)
+    st.write(f"**Value:** {net_yield:.2f}%")
+    st.caption("Net Rental Yield indicates the return on the property's value after covering annual expenses. A yield above 5% is considered favorable.")
+
+    ### Cash-on-Cash Return ###
+    st.markdown("### Cash-on-Cash Return")
+    cash_return = cash_on_cash_return(annual_rent, annual_expenses, down_payment)
+    st.write(f"**Value:** {cash_return:.2f}%")
+    st.caption("Cash-on-Cash Return measures the return on your initial cash investment (down payment). A return above 8% is considered strong.")
+
+    ### Debt-to-Income Ratio (DTI) ###
+    st.markdown("### Debt-to-Income Ratio (DTI)")
+    debt_to_income = dti(monthly_payment, annual_income)
+    st.write(f"**Value:** {debt_to_income:.2f}%")
+    st.caption("DTI compares your monthly mortgage payments to your annual income. A DTI below 36% is generally considered healthy.")
+
+    ### Monthly Mortgage Payment ###
+    st.markdown("### Monthly Mortgage Payment")
+    st.write(f"**Value:** ${monthly_payment:.2f}")
+    st.caption("This is your estimated monthly mortgage payment based on the provided loan amount, interest rate, and loan term.")
+
+        # Calculate Score
+    total_score = calculate_score(result_price_to_rent_ratio, result_roi, net_yield, cash_return, debt_to_income)
+
+    # Display Gauge Chart
+    st.markdown("### Decision Gauge")
+    st.pyplot(create_enhanced_horizontal_bar(total_score))
